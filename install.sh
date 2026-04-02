@@ -9,16 +9,21 @@ if [ ! -f "main.cpp" ] || [ ! -f "idle.png" ] || [ ! -f "talk.png" ] || [ ! -f "
     exit 1
 fi
 
-# 2. Install dependencies via dnf (will ask for sudo password)
-echo "🛠️  Installing dependencies (SDL2 and C++ compiler)..."
-sudo dnf install -y gcc-c++ SDL2-devel SDL2_image-devel
+# 2. Smart dependency installation
+echo "🛠️ Checking package manager..."
 
-# 3. Compile the program
-echo "⚙️  Compiling the code..."
-g++ main.cpp -o pngtuber -lSDL2 -lSDL2_image
-
-if [ $? -ne 0 ]; then
-    echo "❌ Compilation failed! Aborting installation."
+if command -v dnf >/dev/null 2>&1; then
+    echo "Fedora/Nobara detected. Installing via dnf..."
+    sudo dnf install -y gcc-c++ SDL2-devel SDL2_image-devel
+elif command -v apt-get >/dev/null 2>&1; then
+    echo "Ubuntu/Debian/Mint detected. Installing via apt..."
+    sudo apt-get update
+    sudo apt-get install -y g++ libsdl2-dev libsdl2-image-dev
+elif command -v pacman >/dev/null 2>&1; then
+    echo "Arch/Manjaro detected. Installing via pacman..."
+    sudo pacman -S --noconfirm gcc sdl2 sdl2_image
+else
+    echo "❌ Unknown Linux distribution. Please install C++ compiler, SDL2 and SDL2_image manually."
     exit 1
 fi
 
