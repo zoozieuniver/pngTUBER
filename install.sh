@@ -1,77 +1,86 @@
 #!/bin/bash
 
-echo "📦 Starting PNGTuber installation..."
+echo "------------------------------------------"
+echo "   PNGTuber CLI - Universal Installer    "
+echo "------------------------------------------"
 
-# 1. Check if source files exist in the current directory
-if [ ! -f "main.cpp" ] || [ ! -f "idle.png" ] || [ ! -f "talk.png" ] || [ ! -f "miniaudio.h" ]; then
-    echo "❌ Error: Required files (main.cpp, miniaudio.h, idle.png, talk.png) not found!"
-    echo "Please run this script from the folder containing these files."
-    exit 1
-fi
+# --- 1. ПЕРЕВІРКА ЗАЛЕЖНОСТЕЙ (КРОС-ДИСТРИБУТИВ) ---
+echo "🔍 Detecting package manager..."
 
-# 2. Smart dependency installation
-echo "🛠️ Checking package manager..."
-
-if command -v dnf >/dev/null 2>&1; then
-    echo "Fedora/Nobara detected. Installing via dnf..."
+if command -v apt &> /dev/null; then
+    echo "📦 Debian/Ubuntu/Mint detected. Installing via apt..."
+    sudo apt update && sudo apt install -y build-essential libsdl2-dev libsdl2-image-dev
+elif command -v dnf &> /dev/null; then
+    echo "📦 Fedora/RHEL detected. Installing via dnf..."
     sudo dnf install -y gcc-c++ SDL2-devel SDL2_image-devel
-elif command -v apt-get >/dev/null 2>&1; then
-    echo "Ubuntu/Debian/Mint detected. Installing via apt..."
-    sudo apt-get update
-    sudo apt-get install -y g++ libsdl2-dev libsdl2-image-dev
-elif command -v pacman >/dev/null 2>&1; then
-    echo "Arch/Manjaro detected. Installing via pacman..."
-    sudo pacman -S --noconfirm gcc sdl2 sdl2_image
+elif command -v pacman &> /dev/null; then
+    echo "📦 Arch/Manjaro detected. Installing via pacman..."
+    sudo pacman -S --needed base-devel sdl2 sdl2_image
+elif command -v zypper &> /dev/null; then
+    echo "📦 OpenSUSE detected. Installing via zypper..."
+    sudo zypper install -y gcc-c++ libSDL2-devel libSDL2_image-devel
 else
-    echo "❌ Unknown Linux distribution. Please install C++ compiler, SDL2 and SDL2_image manually."
-    exit 1
+    echo "⚠️ Unknown distribution. Please install SDL2 and SDL2_image manually."
 fi
 
-# 3. Compile the source code
-echo "⚙️ Compiling C++ code..."
-g++ main.cpp -o pngtuber -lSDL2 -lSDL2_image
+# --- 2. СТВОРЕННЯ СТРУКТУРИ ПАПОК ---
+echo "📂 Creating directory structure..."
+mkdir -p assets/errors
+mkdir -p assets/icons
+mkdir -p presets/default
+mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/icons
 
-if [ $? -ne 0 ]; then
-    echo "❌ Compilation failed! Please check for missing dependencies or code errors."
-    exit 1
+# --- 3. РОЗПАКУВАННЯ РЕСУРСІВ (BASE64) ---
+echo "📦 Extracting embedded assets..."
+
+# Заміни ці плейсхолдери на свої реальні Base64 рядки
+echo "BASE64_CODE_HERE" | base64 -d > main.cpp
+echo "BASE64_AUDIO_H_HERE" | base64 -d > miniaudio.h
+
+# Розпакування картинок та іконки
+echo "BASE64_IDLE_PNG" | base64 -d > presets/default/idle.png
+echo "BASE64_TALK_PNG" | base64 -d > presets/default/talk.png
+echo "BASE64_ERR_IDLE" | base64 -d > assets/errors/error_idle.png
+echo "BASE64_ERR_TALK" | base64 -d > assets/errors/error_talk.png
+echo "BASE64_ICON_PNG" | base64 -d > assets/icons/app_icon.png
+
+# Реєстрація іконки в системі
+cp assets/icons/app_icon.png ~/.local/share/icons/pngtuber_icon.png
+
+# --- 4. КОМПІЛЯЦІЯ ---
+echo "⚙️ Compiling PNGTuber CLI..."
+# Компілюємо з підтримкою потоків та динамічних бібліотек
+g++ main.cpp -o PNGTuber -lSDL2 -lSDL2_image -lpthread -ldl
+chmod +x PNGTuber
+
+# --- 5. КОНФІГУРАЦІЯ ---
+# Створюємо дефолтний конфіг, якщо його ще немає
+if [ ! -f config.txt ]; then
+    echo "preset=default" > config.txt
+    echo "threshold=100" >> config.txt
+    echo "shake_intensity=5" >> config.txt
 fi
-echo "✅ Compilation successful!"
 
-# 4. Set up directories (User-level installation, no root needed here)
-echo "📂 Setting up directories..."
-INSTALL_DIR="$HOME/.local/share/pngtuber"
-BIN_DIR="$HOME/.local/bin"
-
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$BIN_DIR"
-
-# 5. Copy files to their new home
-echo "🚚 Moving files..."
-cp pngtuber "$BIN_DIR/"
-cp idle.png talk.png "$INSTALL_DIR/"
-
-# Make sure the binary is executable
-chmod +x "$BIN_DIR/pngtuber"
-
-# 6. Create Desktop Entry (Shortcut)
-echo "🌟 Creating desktop shortcut..."
-DESKTOP_FILE="$HOME/.local/share/applications/pngtuber.desktop"
-
-cat <<EOF > "$DESKTOP_FILE"
+# --- 6. СИСТЕМНА ІНТЕГРАЦІЯ (DESKTOP FILE) ---
+echo "🚀 Creating system menu shortcut..."
+cat <<EOF > ~/.local/share/applications/pngtuber.desktop
 [Desktop Entry]
-Name=PNGTuber
-Comment=Control panel and avatar for PNGTuber
-Exec=$BIN_DIR/pngtuber
-Path=$INSTALL_DIR
-Terminal=true
+Version=1.0
 Type=Application
-Categories=AudioVideo;
+Name=PNGTuber CLI
+Comment=Simple PNGTuber with shake and fallback effects
+Exec=$(pwd)/PNGTuber
+Icon=$HOME/.local/share/icons/pngtuber_icon.png
+Terminal=true
+Categories=Utility;Video;AudioVideo;
 EOF
 
-chmod +x "$DESKTOP_FILE"
+# --- 7. ПРИБИРАННЯ ---
+echo "🧹 Cleaning up source files..."
+rm main.cpp miniaudio.h
 
-echo "========================================="
-echo "✅ Installation complete!"
-echo "You can now find 'PNGTuber' in your application menu."
-echo "Note: The terminal will open automatically to show the control menu."
-echo "========================================="
+echo "------------------------------------------"
+echo "✨ SUCCESS! PNGTuber CLI is installed. ✨"
+echo "You can find it in your app menu or run ./PNGTuber"
+echo "------------------------------------------"
