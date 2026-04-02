@@ -27,6 +27,16 @@ else
     exit 1
 fi
 
+# 3. Compile the source code
+echo "⚙️ Compiling C++ code..."
+g++ main.cpp -o pngtuber -lSDL2 -lSDL2_image
+
+if [ $? -ne 0 ]; then
+    echo "❌ Compilation failed! Please check for missing dependencies or code errors."
+    exit 1
+fi
+echo "✅ Compilation successful!"
+
 # 4. Set up directories (User-level installation, no root needed here)
 echo "📂 Setting up directories..."
 INSTALL_DIR="$HOME/.local/share/pngtuber"
