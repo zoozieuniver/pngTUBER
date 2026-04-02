@@ -112,7 +112,11 @@ void drawVolumeBar(float currentVol, float thresholdVal) {
 }
 
 void drawTerminalUI() {
+    #ifdef _WIN32
     system("cls");
+#else
+    system("clear");
+#endif
     std::cout << "=== PNGTuber Control Panel ===\n\n";
 
     if (currentState == STATE_MAIN_MENU) {
