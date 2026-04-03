@@ -156,14 +156,23 @@ int main() {
     SDL_Init(SDL_INIT_VIDEO); 
     IMG_Init(IMG_INIT_PNG);
     
-    // --- ПРИМУСОВЕ ВСТАНОВЛЕННЯ РОБОЧОЇ ДИРЕКТОРІЇ (для Linux/Unix) ---
+    // --- ПРИМУСОВЕ ВСТАНОВЛЕННЯ РОБОЧОЇ ДИРЕКТОРІЇ (для Linux) ---
 #ifndef _WIN32
     try {
-        // Отримуємо шлях до самого виконуваного файлу і переходимо в його папку
+        // Отримуємо шлях до бінарника через /proc/self/exe
         fs::path exePath = fs::canonical("/proc/self/exe").parent_path();
         fs::current_path(exePath);
+        
+        // Спробуємо створити файл-тест, щоб перевірити права на запис
+        std::ofstream testFile("write_test.tmp");
+        if (testFile.is_open()) {
+            testFile.close();
+            fs::remove("write_test.tmp");
+        } else {
+            std::cerr << "[WARNING] No write permissions in: " << exePath << std::endl;
+        }
     } catch (const std::exception& e) {
-        std::cerr << "Could not set working directory: " << e.what() << std::endl;
+        std::cerr << "Path error: " << e.what() << std::endl;
     }
 #endif
 
@@ -176,30 +185,26 @@ int main() {
         }
     }
 
-    // --- ДІАГНОСТИКА ТА ПОШУК ПРЕСЕТІВ ---
-    std::cout << "--- System Info ---" << std::endl;
-    std::cout << "Current execution path: " << fs::current_path() << std::endl;
-
+    // Пошук пресетів
     if (fs::exists("presets")) {
-        std::cout << "Presets folder: FOUND" << std::endl;
         for (const auto& entry : fs::directory_iterator("presets")) {
             if (entry.is_directory()) {
-                std::string pName = entry.path().filename().string();
-                presetList.push_back(pName);
-                std::cout << "  > Loaded preset: " << pName << std::endl;
+                presetList.push_back(entry.path().filename().string());
             }
         }
-    } else {
-        std::cout << "[ERROR] Presets folder NOT FOUND at: " << fs::current_path() << std::endl;
-        std::cout << "Please ensure 'presets' folder is in the same directory as the app." << std::endl;
     }
-    std::cout << "-------------------\n" << std::endl;
 
-    // Початкове завантаження
-    applyPreset(presetList.empty() ? "default" : presetList[0]);
+    // Завантаження першого доступного пресета
+    if (!presetList.empty()) {
+        applyPreset(presetList[0]);
+    } else {
+        applyPreset("default");
+    }
+
     if (!deviceList.empty()) switchMicrophone(0);
 
-    bool running = true; SDL_Event ev;
+    bool running = true; 
+    SDL_Event ev;
     drawTerminalUI();
 
     while (running) {
@@ -210,12 +215,18 @@ int main() {
                 if (currentState == STATE_THRESHOLD) {
                     if (ev.key.keysym.sym == SDLK_UP) threshold = std::min(1.0f, threshold + 0.01f);
                     else if (ev.key.keysym.sym == SDLK_DOWN) threshold = std::max(0.0f, threshold - 0.01f);
-                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
+                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) {
+                        saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
+                        currentState = STATE_MAIN_MENU;
+                    }
                 }
                 else if (currentState == STATE_SHAKE_ADJUST) {
                     if (ev.key.keysym.sym == SDLK_UP) currentSettings.shake = std::min(20, currentSettings.shake + 1);
                     else if (ev.key.keysym.sym == SDLK_DOWN) currentSettings.shake = std::max(0, currentSettings.shake - 1);
-                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
+                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) {
+                        saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
+                        currentState = STATE_MAIN_MENU;
+                    }
                 }
                 // ОБРОБКА НАВІГАЦІЇ
                 else {
@@ -237,10 +248,12 @@ int main() {
                             if (selectedIndex == 0) { 
                                 currentSettings.w *= 1.1; currentSettings.h *= 1.1; 
                                 SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); 
+                                saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
                             }
                             else if (selectedIndex == 1) { 
                                 currentSettings.w *= 0.9; currentSettings.h *= 0.9; 
                                 SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); 
+                                saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
                             }
                             else if (selectedIndex == 2) currentState = STATE_MAIN_MENU;
                             else if (selectedIndex >= 3) applyPreset(presetList[selectedIndex - 3]);
@@ -273,7 +286,9 @@ int main() {
         SDL_Delay(15);
     }
     
+    // Фінальне збереження перед виходом
     saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
+    
     ma_device_uninit(&device); 
     ma_context_uninit(&context); 
     SDL_Quit();
