@@ -158,9 +158,14 @@ int main() {
     if (ma_context_get_devices(&context, NULL, NULL, &pInfos, &count) == MA_SUCCESS)
         for (ma_uint32 i = 0; i < count; i++) deviceList.push_back({pInfos[i].name, pInfos[i].id});
 
-    if (fs::exists("presets"))
-        for (const auto& entry : fs::directory_iterator("presets")) if (entry.is_directory()) presetList.push_back(entry.path().filename().string());
-    
+    std::cout << "Current path: " << fs::current_path() << std::endl;
+
+    if (fs::exists("presets")) {
+    for (const auto& entry : fs::directory_iterator("presets")) if (entry.is_directory()) presetList.push_back(entry.path().filename().string());
+    } else {
+    std::cout << "[ERROR] Presets folder not found in current directory!" << std::endl;
+    }    
+
     applyPreset(presetList.empty() ? "default" : presetList[0]);
     if (!deviceList.empty()) switchMicrophone(0);
 
