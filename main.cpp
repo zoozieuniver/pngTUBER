@@ -10,38 +10,27 @@
 #include <filesystem>
 #include <cmath>
 #include <algorithm>
+#include <ctime>
 
 namespace fs = std::filesystem;
 
-// --- App States ---
-enum AppState { 
-    STATE_MAIN_MENU, 
-    STATE_MIC_SELECTION, 
-    STATE_THRESHOLD, 
-    STATE_SHAKE_ADJUST, 
-    STATE_CHARACTER_SELECT 
-};
+enum AppState { STATE_MAIN_MENU, STATE_MIC_SELECTION, STATE_THRESHOLD, STATE_SHAKE_ADJUST, STATE_CHARACTER_SELECT };
 AppState currentState = STATE_MAIN_MENU;
 
-// --- Structures ---
+struct AudioDevice { std::string name; ma_device_id id; };
 struct PresetSettings {
     int x = SDL_WINDOWPOS_CENTERED, y = SDL_WINDOWPOS_CENTERED;
     int w = 400, h = 400;
     int shake = 5;
 };
 
-struct AudioDevice {
-    std::string name;
-    ma_device_id id;
-};
-
-// --- Globals ---
+// Глобальні змінні
 std::string currentPreset = "default";
 std::vector<std::string> presetList;
 std::vector<AudioDevice> deviceList;
+std::string activeMicName = "None";
 int selectedIndex = 0;
-int viewStart = 0; // Для гортання списку мікрофонів
-
+int viewStart = 0;
 float threshold = 0.05f;
 float currentVolume = 0.0f;
 bool isTalking = false;
@@ -58,160 +47,119 @@ ma_context context;
 ma_device device;
 bool isMicInitialized = false;
 
-// --- Functions ---
+void clearScreen() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+}
+
 void saveSettings(const std::string& name, int x, int y, int w, int h, int shake) {
     std::ofstream out("presets/" + name + "/settings.txt");
-    out << x << " " << y << " " << w << " " << h << " " << shake;
+    out << x << " " << y << " " << w << " " << h << " " << shake << " " << threshold;
 }
 
-PresetSettings loadSettings(const std::string& name) {
-    PresetSettings s;
+void loadSettings(const std::string& name) {
     std::ifstream in("presets/" + name + "/settings.txt");
-    if (in >> s.x >> s.y >> s.w >> s.h >> s.shake) return s;
-    return s; 
+    float savedThreshold = 0.05f;
+    if (in >> currentSettings.x >> currentSettings.y >> currentSettings.w >> currentSettings.h >> currentSettings.shake >> savedThreshold) {
+        threshold = savedThreshold;
+    }
 }
 
-// --- Аудіо логіка з вашої старої версії ---
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
     const float* samples = (const float*)pInput;
     float maxAmp = 0;
     for (ma_uint32 i = 0; i < frameCount; i++) if (std::abs(samples[i]) > maxAmp) maxAmp = std::abs(samples[i]);
-    
     currentVolume = maxAmp;
     if (currentVolume > threshold) { isTalking = true; lastSoundTime = SDL_GetTicks(); }
     else if (SDL_GetTicks() - lastSoundTime > mouthDelay) isTalking = false;
 }
 
 void switchMicrophone(int index) {
+    if (index < 0 || index >= (int)deviceList.size()) return;
     if (isMicInitialized) ma_device_uninit(&device);
-
     ma_device_config config = ma_device_config_init(ma_device_type_capture);
     config.capture.pDeviceID = &deviceList[index].id;
-    config.capture.format = ma_format_f32;
-    config.capture.channels = 1;
-    config.sampleRate = 44100;
+    config.capture.format = ma_format_f32; config.capture.channels = 1; config.sampleRate = 44100;
     config.dataCallback = data_callback;
-
     if (ma_device_init(&context, &config, &device) == MA_SUCCESS) {
         ma_device_start(&device);
+        activeMicName = deviceList[index].name;
         isMicInitialized = true;
     }
 }
 
 void applyPreset(std::string name) {
-    // Зберігаємо старі налаштування перед перемиканням
     if (window) {
-        int x, y, w, h;
-        SDL_GetWindowPosition(window, &x, &y);
-        SDL_GetWindowSize(window, &w, &h);
+        int x, y, w, h; SDL_GetWindowPosition(window, &x, &y); SDL_GetWindowSize(window, &w, &h);
         saveSettings(currentPreset, x, y, w, h, currentSettings.shake);
     }
-    
-    if (idleTex) SDL_DestroyTexture(idleTex);
-    if (talkTex) SDL_DestroyTexture(talkTex);
-    if (renderer) SDL_DestroyRenderer(renderer);
-    if (window) SDL_DestroyWindow(window);
+    if (idleTex) SDL_DestroyTexture(idleTex); if (talkTex) SDL_DestroyTexture(talkTex);
+    if (renderer) SDL_DestroyRenderer(renderer); if (window) SDL_DestroyWindow(window);
 
     currentPreset = name;
-    currentSettings = loadSettings(name);
-    
-    SDL_Rect disp; SDL_GetDisplayBounds(0, &disp);
-    currentSettings.x = std::clamp(currentSettings.x, 0, disp.w - currentSettings.w);
-    currentSettings.y = std::clamp(currentSettings.y, 0, disp.h - currentSettings.h);
-
+    loadSettings(name);
     window = SDL_CreateWindow(name.c_str(), currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, SDL_WINDOW_BORDERLESS);
     
-    // Встановлення іконки (універсально для Win/Linux)
     SDL_Surface* iconSurf = IMG_Load("assets/icons/app_icon.png");
-    if (iconSurf) {
-        SDL_SetWindowIcon(window, iconSurf);
-        SDL_FreeSurface(iconSurf);
-    }
+    if (iconSurf) { SDL_SetWindowIcon(window, iconSurf); SDL_FreeSurface(iconSurf); }
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     SDL_SetWindowHitTest(window, [](SDL_Window*, const SDL_Point*, void*) { return SDL_HITTEST_DRAGGABLE; }, NULL);
-
     idleTex = IMG_LoadTexture(renderer, ("presets/" + name + "/idle.png").c_str());
     talkTex = IMG_LoadTexture(renderer, ("presets/" + name + "/talk.png").c_str());
 }
 
-// --- Малювання шкали гучності ---
 void drawVolumeBar(float currentVol, float thresholdVal) {
-    int width = 20;
-    int v = (int)(currentVol * width * 2); // Множник для кращої візуалізації
-    int t = (int)(thresholdVal * width * 2);
-    if (v > width) v = width;
-    if (t > width) t = width;
-
-    std::cout << "Volume: [";
+    int width = 20; int v = (int)(currentVol * width * 2.5f); int t = (int)(thresholdVal * width * 2.5f);
+    std::cout << "Vol: [";
     for (int i = 0; i < width; ++i) {
-        if (i < v) std::cout << "▮";
-        else if (i == t) std::cout << "|";
-        else std::cout << "-";
+        if (i < v) std::cout << "▮"; else if (i == t) std::cout << "|"; else std::cout << "-";
     }
-    std::cout << "] " << (int)(currentVol * 100) << "%\n";
+    std::cout << "] " << (int)(currentVol * 100) << "%";
 }
 
 void drawTerminalUI() {
-    system("cls"); // Для Linux це автоматично спрацює як clear через ваші попередні тести
+    clearScreen();
     std::cout << "=== PNGTuber Control Panel ===\n\n";
-
     if (currentState == STATE_MAIN_MENU) {
-        std::cout << (selectedIndex == 0 ? " -> " : "    ") << "1. Select Microphone\n";
+        std::cout << (selectedIndex == 0 ? " -> " : "    ") << "1. Select Microphone (" << activeMicName << ")\n";
         std::cout << (selectedIndex == 1 ? " -> " : "    ") << "2. Adjust Threshold (" << threshold << ")\n";
         std::cout << (selectedIndex == 2 ? " -> " : "    ") << "3. Adjust Shake Intensity (" << currentSettings.shake << ")\n";
-        std::cout << (selectedIndex == 3 ? " -> " : "    ") << "4. Character & View Settings\n";
+        std::cout << (selectedIndex == 3 ? " -> " : "    ") << "4. Character & Scale Settings\n";
         std::cout << (selectedIndex == 4 ? " -> " : "    ") << "5. Exit\n";
-    } 
-    else if (currentState == STATE_THRESHOLD) {
-        std::cout << "Adjust Threshold (Up/Down to change, Enter to save):\n\n";
-        drawVolumeBar(currentVolume, threshold);
-        std::cout << "\nThreshold: " << threshold << "\n";
-    }
-    else if (currentState == STATE_SHAKE_ADJUST) {
-        std::cout << "Adjust Shake Intensity (Up/Down): " << currentSettings.shake << "\n[Enter] Confirm\n";
-    }
-    else if (currentState == STATE_MIC_SELECTION) {
-        std::cout << "Select a Microphone (Up/Down, Enter to select, Esc to cancel):\n\n";
-        int maxVisible = 5;
-        int totalMics = deviceList.size();
-        int endView = std::min(viewStart + maxVisible, totalMics);
-
-        for (int i = viewStart; i < endView; ++i) {
-            std::cout << (i == selectedIndex ? " -> " : "    ") << i + 1 << ". " << deviceList[i].name << "\n";
-        }
-        std::cout << "\n[Showing " << viewStart + 1 << " - " << endView << " of " << totalMics << "]\n";
-    }
-    else if (currentState == STATE_CHARACTER_SELECT) {
-        std::cout << "=== Character & View Settings ===\n\n";
-        std::cout << "Current: " << currentPreset << "\n";
-        std::cout << (selectedIndex == 0 ? " -> " : "    ") << "Scale +10%\n";
-        std::cout << (selectedIndex == 1 ? " -> " : "    ") << "Scale -10%\n";
-        std::cout << (selectedIndex == 2 ? " -> " : "    ") << "Back to Main Menu\n\n";
-        std::cout << "--- Presets ---\n";
-        for (int i = 0; i < presetList.size(); i++)
-            std::cout << (selectedIndex == (i + 3) ? " -> " : "    ") << "Load: " << presetList[i] << "\n";
+    } else if (currentState == STATE_CHARACTER_SELECT) {
+        std::cout << "=== Scale & Presets ===\n";
+        std::cout << (selectedIndex == 0 ? " -> " : "    ") << "[Scale +10%] (Size: " << currentSettings.w << "x" << currentSettings.h << ")\n";
+        std::cout << (selectedIndex == 1 ? " -> " : "    ") << "[Scale -10%]\n";
+        std::cout << (selectedIndex == 2 ? " -> " : "    ") << "[Back to Main Menu]\n\n";
+        for (int i = 0; i < (int)presetList.size(); i++)
+            std::cout << (selectedIndex == (i + 3) ? " -> " : "    ") << "Load: " << presetList[i] << (presetList[i] == currentPreset ? " (Active)" : "") << "\n";
+    } else if (currentState == STATE_THRESHOLD) {
+        std::cout << "Adjust Threshold (Up/Down):\n"; drawVolumeBar(currentVolume, threshold);
+        std::cout << "\n\n[Enter/Esc] Back";
+    } else if (currentState == STATE_SHAKE_ADJUST) {
+        std::cout << "Shake Intensity: " << currentSettings.shake << "\n[ ";
+        for(int i=0; i<20; i++) std::cout << (i < currentSettings.shake ? "▮" : "-");
+        std::cout << " ]\n\n[Enter/Esc] Back";
+    } else if (currentState == STATE_MIC_SELECTION) {
+        int endView = std::min(viewStart + 5, (int)deviceList.size());
+        for (int i = viewStart; i < endView; ++i)
+            std::cout << (i == selectedIndex ? " -> " : "    ") << i + 1 << ". " << deviceList[i].name << (deviceList[i].name == activeMicName ? " (*)" : "") << "\n";
     }
 }
 
 int main() {
-    SDL_Init(SDL_INIT_VIDEO); IMG_Init(IMG_INIT_PNG);
-    
-    // Ініціалізація аудіо контексту
+    srand(time(0)); SDL_Init(SDL_INIT_VIDEO); IMG_Init(IMG_INIT_PNG);
     ma_context_init(NULL, 0, NULL, &context);
-    ma_device_info* pCaptureDeviceInfos;
-    ma_uint32 captureDeviceCount;
-    if (ma_context_get_devices(&context, NULL, NULL, &pCaptureDeviceInfos, &captureDeviceCount) == MA_SUCCESS) {
-        for (ma_uint32 i = 0; i < captureDeviceCount; i++) {
-            deviceList.push_back({pCaptureDeviceInfos[i].name, pCaptureDeviceInfos[i].id});
-        }
-    }
+    ma_device_info* pInfos; ma_uint32 count;
+    if (ma_context_get_devices(&context, NULL, NULL, &pInfos, &count) == MA_SUCCESS)
+        for (ma_uint32 i = 0; i < count; i++) deviceList.push_back({pInfos[i].name, pInfos[i].id});
 
-    // Завантаження пресетів
-    if (fs::exists("presets")) {
-        for (const auto& entry : fs::directory_iterator("presets")) 
-            if (entry.is_directory()) presetList.push_back(entry.path().filename().string());
-    }
+    if (fs::exists("presets"))
+        for (const auto& entry : fs::directory_iterator("presets")) if (entry.is_directory()) presetList.push_back(entry.path().filename().string());
     
     applyPreset(presetList.empty() ? "default" : presetList[0]);
     if (!deviceList.empty()) switchMicrophone(0);
@@ -223,80 +171,60 @@ int main() {
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) running = false;
             if (ev.type == SDL_KEYDOWN) {
-                if (currentState == STATE_MAIN_MENU) {
-                    if (ev.key.keysym.sym == SDLK_DOWN) selectedIndex = (selectedIndex + 1) % 5;
-                    if (ev.key.keysym.sym == SDLK_UP) selectedIndex = (selectedIndex + 4) % 5;
-                    if (ev.key.keysym.sym == SDLK_RETURN) {
-                        if (selectedIndex == 0) { currentState = STATE_MIC_SELECTION; selectedIndex = 0; viewStart = 0; }
-                        else if (selectedIndex == 1) currentState = STATE_THRESHOLD;
-                        else if (selectedIndex == 2) currentState = STATE_SHAKE_ADJUST;
-                        else if (selectedIndex == 3) { currentState = STATE_CHARACTER_SELECT; selectedIndex = 0; }
-                        else if (selectedIndex == 4) running = false;
-                    }
-                } 
-                else if (currentState == STATE_MIC_SELECTION) {
-                    int totalMics = deviceList.size();
-                    if (ev.key.keysym.sym == SDLK_UP && selectedIndex > 0) {
-                        selectedIndex--;
-                        if (selectedIndex < viewStart) viewStart--;
-                    }
-                    if (ev.key.keysym.sym == SDLK_DOWN && selectedIndex < totalMics - 1) {
-                        selectedIndex++;
-                        if (selectedIndex >= viewStart + 5) viewStart++;
-                    }
-                    if (ev.key.keysym.sym == SDLK_RETURN) {
-                        switchMicrophone(selectedIndex);
-                        currentState = STATE_MAIN_MENU; selectedIndex = 0;
-                    }
-                    if (ev.key.keysym.sym == SDLK_ESCAPE) { currentState = STATE_MAIN_MENU; selectedIndex = 0; }
-                }
-                else if (currentState == STATE_THRESHOLD) {
-                    if (ev.key.keysym.sym == SDLK_UP) threshold += 0.01f;
-                    if (ev.key.keysym.sym == SDLK_DOWN) threshold -= 0.01f;
-                    if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
+                // ОБРОБКА ЦИФРОВИХ ЗНАЧЕНЬ (Поріг / Тряска)
+                if (currentState == STATE_THRESHOLD) {
+                    if (ev.key.keysym.sym == SDLK_UP) threshold = std::min(1.0f, threshold + 0.01f);
+                    else if (ev.key.keysym.sym == SDLK_DOWN) threshold = std::max(0.0f, threshold - 0.01f);
+                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
                 }
                 else if (currentState == STATE_SHAKE_ADJUST) {
-                    if (ev.key.keysym.sym == SDLK_UP) currentSettings.shake++;
-                    if (ev.key.keysym.sym == SDLK_DOWN) currentSettings.shake--;
-                    if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
+                    if (ev.key.keysym.sym == SDLK_UP) currentSettings.shake = std::min(20, currentSettings.shake + 1);
+                    else if (ev.key.keysym.sym == SDLK_DOWN) currentSettings.shake = std::max(0, currentSettings.shake - 1);
+                    else if (ev.key.keysym.sym == SDLK_RETURN || ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
                 }
-                else if (currentState == STATE_CHARACTER_SELECT) {
-                    int total = 3 + presetList.size();
-                    if (ev.key.keysym.sym == SDLK_DOWN) selectedIndex = (selectedIndex + 1) % total;
-                    if (ev.key.keysym.sym == SDLK_UP) selectedIndex = (selectedIndex + total - 1) % total;
-                    if (ev.key.keysym.sym == SDLK_RETURN) {
-                        if (selectedIndex == 0) { currentSettings.w *= 1.1; currentSettings.h *= 1.1; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
-                        else if (selectedIndex == 1) { currentSettings.w *= 0.9; currentSettings.h *= 0.9; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
-                        else if (selectedIndex == 2) currentState = STATE_MAIN_MENU;
-                        else if (selectedIndex >= 3) applyPreset(presetList[selectedIndex - 3]);
+                // ОБРОБКА НАВІГАЦІЇ
+                else {
+                    int totalOptions = 5; 
+                    if (currentState == STATE_CHARACTER_SELECT) totalOptions = 3 + (int)presetList.size();
+                    else if (currentState == STATE_MIC_SELECTION) totalOptions = (int)deviceList.size();
+
+                    if (ev.key.keysym.sym == SDLK_DOWN) selectedIndex = (selectedIndex + 1) % totalOptions;
+                    else if (ev.key.keysym.sym == SDLK_UP) selectedIndex = (selectedIndex + totalOptions - 1) % totalOptions;
+                    else if (ev.key.keysym.sym == SDLK_RETURN) {
+                        if (currentState == STATE_MAIN_MENU) {
+                            if (selectedIndex == 0) { currentState = STATE_MIC_SELECTION; selectedIndex = 0; viewStart = 0; }
+                            else if (selectedIndex == 1) currentState = STATE_THRESHOLD;
+                            else if (selectedIndex == 2) currentState = STATE_SHAKE_ADJUST;
+                            else if (selectedIndex == 3) { currentState = STATE_CHARACTER_SELECT; selectedIndex = 0; }
+                            else if (selectedIndex == 4) running = false;
+                        } 
+                        else if (currentState == STATE_CHARACTER_SELECT) {
+                            if (selectedIndex == 0) { currentSettings.w *= 1.1; currentSettings.h *= 1.1; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
+                            else if (selectedIndex == 1) { currentSettings.w *= 0.9; currentSettings.h *= 0.9; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
+                            else if (selectedIndex == 2) currentState = STATE_MAIN_MENU;
+                            else if (selectedIndex >= 3) applyPreset(presetList[selectedIndex - 3]);
+                        } 
+                        else if (currentState == STATE_MIC_SELECTION) { switchMicrophone(selectedIndex); currentState = STATE_MAIN_MENU; }
                     }
-                    if (ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
+                    else if (ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
                 }
                 drawTerminalUI();
             }
         }
-
-        // --- Виправлена логіка тряски ---
         if (isTalking) {
             float s = (float)currentSettings.shake;
             offsetX = (rand() % (int)(s * 2 + 1)) - s;
-            offsetY = (rand() % (int)(s * 2 + 1)) - (s * 1.5f);
-        } else {
-            offsetX *= 0.85f; offsetY *= 0.85f;
-        }
+            offsetY = (rand() % (int)(s * 2 + 1)) - (s * 0.5f);
+        } else { offsetX *= 0.8f; offsetY *= 0.8f; }
 
         SDL_Rect r = {(int)offsetX, (int)offsetY, currentSettings.w, currentSettings.h};
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, isTalking ? talkTex : idleTex, NULL, &r);
         SDL_RenderPresent(renderer);
-        
-        if (currentState == STATE_THRESHOLD) drawTerminalUI(); // Постійне оновлення шкали в меню
-        SDL_Delay(10);
+        if (currentState == STATE_THRESHOLD) drawTerminalUI();
+        SDL_Delay(15);
     }
-
-    ma_device_uninit(&device);
-    ma_context_uninit(&context);
-    SDL_Quit();
+    saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
+    ma_device_uninit(&device); ma_context_uninit(&context); SDL_Quit();
     return 0;
 }

@@ -26,3 +26,6 @@ presets/nedo_default/talk.png
 presets/slonik/idle.png
 presets/slonik/settings.txt
 presets/slonik/talk.png
+presets/errors/talk.png
+presets/errors/settings.txt
+presets/errors/idle.png
