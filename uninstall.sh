@@ -1,30 +1,38 @@
 #!/bin/bash
 
-echo "🗑️ Starting PNGTuber uninstallation..."
-
-INSTALL_DIR="$HOME/.local/share/pngtuber"
+INSTALL_DIR="$HOME/.local/share/pngtuber-cli"
 BIN_DIR="$HOME/.local/bin"
 DESKTOP_FILE="$HOME/.local/share/applications/pngtuber.desktop"
 
-# Видаляємо виконуваний файл
-if [ -f "$BIN_DIR/pngtuber" ]; then
-    rm "$BIN_DIR/pngtuber"
-    echo "🧹 Removed executable from $BIN_DIR"
-fi
+echo "------------------------------------------"
+echo "   PNGTuber CLI - Complete Uninstall     "
+echo "------------------------------------------"
 
-# Видаляємо папку з ресурсами (картинками)
+# 1. Remove assets, source and binary
 if [ -d "$INSTALL_DIR" ]; then
-    rm -r "$INSTALL_DIR"
-    echo "🧹 Removed assets from $INSTALL_DIR"
+    echo "📂 Removing all files from $INSTALL_DIR..."
+    rm -rf "$INSTALL_DIR"
+    echo "✅ Done."
 fi
 
-# Видаляємо ярлик
+# 2. Remove launcher
+if [ -f "$BIN_DIR/pngtuber" ]; then
+    echo "⚙️ Removing launcher from $BIN_DIR..."
+    rm -f "$BIN_DIR/pngtuber"
+    echo "✅ Done."
+fi
+
+# 3. Remove desktop shortcut
 if [ -f "$DESKTOP_FILE" ]; then
-    rm "$DESKTOP_FILE"
-    echo "🧹 Removed desktop shortcut"
+    echo "🌟 Removing desktop shortcut..."
+    rm -f "$DESKTOP_FILE"
+    
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database ~/.local/share/applications/
+    fi
+    echo "✅ Done."
 fi
 
 echo "========================================="
-echo "✅ Uninstallation complete!"
-echo "PNGTuber has been completely removed from your system."
+echo "✨ System is clean!"
 echo "========================================="
