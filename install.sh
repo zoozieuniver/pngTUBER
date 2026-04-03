@@ -56,13 +56,25 @@ Type=Application
 Categories=Utility;AudioVideo;
 EOF
 
-# 5. ОЧИЩЕННЯ (Крок 3: Видаляємо все, що качали)
-echo "🧹 Cleaning up source files..."
-cd "$HOME"
-rm -rf "$TEMP_DIR"
+# --- 5. ОЧИЩЕННЯ (Крок 3: Видаляємо все, що качали) ---
+echo "🧹 Cleaning up temporary files..."
+
+# Повертаємось у папку, де лежить сам інсталятор
+cd "$(dirname "$0")"
+
+# Видаляємо тимчасову папку, яку створив git clone
+if [ -d "$TEMP_DIR" ]; then
+    rm -rf "$TEMP_DIR"
+    echo "✅ Temporary folder $TEMP_DIR removed."
+else
+    # Якщо TEMP_DIR не спрацював як змінна, видаляємо за назвою
+    rm -rf pngtuber_tmp_build
+    echo "✅ Source files cleaned up."
+fi
+
+# (Опціонально) Видалити сам інсталятор після завершення
+# rm -- "$0" 
 
 echo "------------------------------------------"
-echo "✨ INSTALLATION COMPLETE!"
-echo "Folder: $INSTALL_DIR"
-echo "Shortcut: Applications -> PNGTuber CLI"
+echo "✨ ALL DONE! System is clean."
 echo "------------------------------------------"
