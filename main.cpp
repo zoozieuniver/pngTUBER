@@ -152,20 +152,50 @@ void drawTerminalUI() {
 }
 
 int main() {
-    srand(time(0)); SDL_Init(SDL_INIT_VIDEO); IMG_Init(IMG_INIT_PNG);
+    srand(time(0)); 
+    SDL_Init(SDL_INIT_VIDEO); 
+    IMG_Init(IMG_INIT_PNG);
+    
+    // --- ПРИМУСОВЕ ВСТАНОВЛЕННЯ РОБОЧОЇ ДИРЕКТОРІЇ (для Linux/Unix) ---
+#ifndef _WIN32
+    try {
+        // Отримуємо шлях до самого виконуваного файлу і переходимо в його папку
+        fs::path exePath = fs::canonical("/proc/self/exe").parent_path();
+        fs::current_path(exePath);
+    } catch (const std::exception& e) {
+        std::cerr << "Could not set working directory: " << e.what() << std::endl;
+    }
+#endif
+
+    // Ініціалізація Аудіо
     ma_context_init(NULL, 0, NULL, &context);
     ma_device_info* pInfos; ma_uint32 count;
-    if (ma_context_get_devices(&context, NULL, NULL, &pInfos, &count) == MA_SUCCESS)
-        for (ma_uint32 i = 0; i < count; i++) deviceList.push_back({pInfos[i].name, pInfos[i].id});
+    if (ma_context_get_devices(&context, NULL, NULL, &pInfos, &count) == MA_SUCCESS) {
+        for (ma_uint32 i = 0; i < count; i++) {
+            deviceList.push_back({pInfos[i].name, pInfos[i].id});
+        }
+    }
 
-    std::cout << "Current path: " << fs::current_path() << std::endl;
+    // --- ДІАГНОСТИКА ТА ПОШУК ПРЕСЕТІВ ---
+    std::cout << "--- System Info ---" << std::endl;
+    std::cout << "Current execution path: " << fs::current_path() << std::endl;
 
     if (fs::exists("presets")) {
-    for (const auto& entry : fs::directory_iterator("presets")) if (entry.is_directory()) presetList.push_back(entry.path().filename().string());
+        std::cout << "Presets folder: FOUND" << std::endl;
+        for (const auto& entry : fs::directory_iterator("presets")) {
+            if (entry.is_directory()) {
+                std::string pName = entry.path().filename().string();
+                presetList.push_back(pName);
+                std::cout << "  > Loaded preset: " << pName << std::endl;
+            }
+        }
     } else {
-    std::cout << "[ERROR] Presets folder not found in current directory!" << std::endl;
-    }    
+        std::cout << "[ERROR] Presets folder NOT FOUND at: " << fs::current_path() << std::endl;
+        std::cout << "Please ensure 'presets' folder is in the same directory as the app." << std::endl;
+    }
+    std::cout << "-------------------\n" << std::endl;
 
+    // Початкове завантаження
     applyPreset(presetList.empty() ? "default" : presetList[0]);
     if (!deviceList.empty()) switchMicrophone(0);
 
@@ -204,18 +234,29 @@ int main() {
                             else if (selectedIndex == 4) running = false;
                         } 
                         else if (currentState == STATE_CHARACTER_SELECT) {
-                            if (selectedIndex == 0) { currentSettings.w *= 1.1; currentSettings.h *= 1.1; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
-                            else if (selectedIndex == 1) { currentSettings.w *= 0.9; currentSettings.h *= 0.9; SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); }
+                            if (selectedIndex == 0) { 
+                                currentSettings.w *= 1.1; currentSettings.h *= 1.1; 
+                                SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); 
+                            }
+                            else if (selectedIndex == 1) { 
+                                currentSettings.w *= 0.9; currentSettings.h *= 0.9; 
+                                SDL_SetWindowSize(window, currentSettings.w, currentSettings.h); 
+                            }
                             else if (selectedIndex == 2) currentState = STATE_MAIN_MENU;
                             else if (selectedIndex >= 3) applyPreset(presetList[selectedIndex - 3]);
                         } 
-                        else if (currentState == STATE_MIC_SELECTION) { switchMicrophone(selectedIndex); currentState = STATE_MAIN_MENU; }
+                        else if (currentState == STATE_MIC_SELECTION) { 
+                            switchMicrophone(selectedIndex); 
+                            currentState = STATE_MAIN_MENU; 
+                        }
                     }
                     else if (ev.key.keysym.sym == SDLK_ESCAPE) currentState = STATE_MAIN_MENU;
                 }
                 drawTerminalUI();
             }
         }
+        
+        // Логіка тряски
         if (isTalking) {
             float s = (float)currentSettings.shake;
             offsetX = (rand() % (int)(s * 2 + 1)) - s;
@@ -223,13 +264,18 @@ int main() {
         } else { offsetX *= 0.8f; offsetY *= 0.8f; }
 
         SDL_Rect r = {(int)offsetX, (int)offsetY, currentSettings.w, currentSettings.h};
-        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255); 
+        SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, isTalking ? talkTex : idleTex, NULL, &r);
         SDL_RenderPresent(renderer);
+        
         if (currentState == STATE_THRESHOLD) drawTerminalUI();
         SDL_Delay(15);
     }
+    
     saveSettings(currentPreset, currentSettings.x, currentSettings.y, currentSettings.w, currentSettings.h, currentSettings.shake);
-    ma_device_uninit(&device); ma_context_uninit(&context); SDL_Quit();
+    ma_device_uninit(&device); 
+    ma_context_uninit(&context); 
+    SDL_Quit();
     return 0;
 }
