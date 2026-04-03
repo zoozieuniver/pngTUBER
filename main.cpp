@@ -11,6 +11,8 @@
 #include <cmath>
 #include <ctime>
 
+//some_text to check if updates are actually working
+
 // --- App State ---
 enum AppState { STATE_MAIN_MENU, STATE_THRESHOLD, STATE_MIC_SELECTION, STATE_SHAKE_ADJUST };
 AppState currentState = STATE_MAIN_MENU;
