@@ -1,63 +1,70 @@
 #!/bin/bash
 
 echo "------------------------------------------"
-echo "   PNGTuber CLI - Universal Installer    "
+echo "   PNGTuber CLI - Autonomic Installer    "
 echo "------------------------------------------"
 
-# --- 1. SEARCH FOR DEPENDENCIES ---
+# 1. ПЕРЕВІРКА ЗАЛЕЖНОСТЕЙ
 echo "🔍 Searching for dependencies..."
-
-# Перевірка та встановлення пакетів залежно від дистрибутива
-if command -v pacman &> /dev/null; then
-    sudo pacman -S --needed base-devel git sdl2 sdl2_image
-elif command -v apt &> /dev/null; then
-    sudo apt update && sudo apt install -y build-essential git libsdl2-dev libsdl2-image-dev
-elif command -v dnf &> /dev/null; then
+if command -v pacman >/dev/null 2>&1; then
+    sudo pacman -S --noconfirm gcc git sdl2 sdl2_image
+elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update && sudo apt-get install -y g++ git libsdl2-dev libsdl2-image-dev
+elif command -v dnf >/dev/null 2>&1; then
     sudo dnf install -y gcc-c++ git SDL2-devel SDL2_image-devel
-else
-    echo "⚠️ Unknown distribution. Please ensure git, g++, SDL2 and SDL2_image are installed."
 fi
 
-# --- 2. CLONING REPOSITORY ---
-echo "📦 Downloading source code from GitHub..."
-# Видаляємо стару папку, якщо вона була, щоб уникнути конфліктів
-rm -rf pngTUBER
-git clone https://github.com/zoozieuniver/pngTUBER.git
-cd pngTUBER || exit
+# 2. ПІДТЯГУВАННЯ ФАЙЛІВ ОНЛАЙН (Крок 1)
+echo "🌐 Downloading source files from GitHub..."
+REPO_URL="https://github.com/zoozieuniver/pngTUBER.git"
+TEMP_DIR="$HOME/pngtuber_build_tmp"
 
-# --- 3. COMPILING ---
-echo "⚙️ Compiling PNGTuber CLI..."
-# Компілюємо програму з твого репозиторію
-if g++ main.cpp -o PNGTuber -lSDL2 -lSDL2_image -lpthread -ldl; then
+# Видаляємо стару папку, якщо вона була, і клонуємо заново
+rm -rf "$TEMP_DIR"
+git clone "$REPO_URL" "$TEMP_DIR"
+cd "$TEMP_DIR" || { echo "❌ Error: Could not download files"; exit 1; }
+
+# 3. ВСТАНОВЛЕННЯ ПРОГРАМИ НА ОСНОВІ ФАЙЛІВ (Крок 2)
+echo "⚙️ Compiling and installing..."
+INSTALL_DIR="$HOME/.local/share/pngtuber"
+BIN_DIR="$HOME/.local/bin"
+
+mkdir -p "$INSTALL_DIR"
+mkdir -p "$BIN_DIR"
+
+# Компіляція (використовуємо файли, що щойно скачали)
+g++ main.cpp -o pngtuber -lSDL2 -lSDL2_image -lpthread -ldl
+
+if [ $? -eq 0 ]; then
     echo "✅ Compilation successful!"
-    chmod +x PNGTuber
+    # Переносимо бінарник та ресурси
+    mv pngtuber "$BIN_DIR/"
+    cp -r presets "$INSTALL_DIR/"
+    cp -r assets "$INSTALL_DIR/"
+    chmod +x "$BIN_DIR/pngtuber"
 else
-    echo "❌ ERROR: Compilation failed. Please check the error messages above."
+    echo "❌ Error: Compilation failed!"
     exit 1
 fi
 
-# --- 4. SYSTEM INTEGRATION ---
-echo "🚀 Creating system menu shortcut..."
-mkdir -p ~/.local/share/applications
-mkdir -p ~/.local/share/icons
-
-# Копіюємо іконку в системну папку
-cp assets/icons/app_icon.png ~/.local/share/icons/pngtuber_icon.png
-
-# Створюємо .desktop файл
+# Створення ярлика для меню
 cat <<EOF > ~/.local/share/applications/pngtuber.desktop
 [Desktop Entry]
-Version=1.0
-Type=Application
 Name=PNGTuber CLI
-Comment=Simple PNGTuber for Linux
-Exec=$(pwd)/PNGTuber
-Icon=$HOME/.local/share/icons/pngtuber_icon.png
+Exec=$BIN_DIR/pngtuber
+Path=$INSTALL_DIR
+Icon=$INSTALL_DIR/assets/icons/app_icon.png
 Terminal=true
-Categories=Utility;Video;AudioVideo;
+Type=Application
+Categories=AudioVideo;
 EOF
 
+# 4. ВИДАЛЕННЯ ТОГО, ЩО КАЧАЛО (Крок 3)
+echo "🧹 Cleaning up source files..."
+cd "$HOME"
+rm -rf "$TEMP_DIR"
+
 echo "------------------------------------------"
-echo "✨ SUCCESS! PNGTuber CLI is installed. ✨"
-echo "You can find it in your App Menu or run: ./PNGTuber"
+echo "✨ DONE! PNGTuber installed to $BIN_DIR"
+echo "Source files have been removed."
 echo "------------------------------------------"
