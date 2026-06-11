@@ -137,16 +137,13 @@ void renderGUI() {
         }
         
         ImGui::Spacing();
-        ImGui::Text("Voice Threshold:");
-        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
-        ImGui::SliderFloat("##ThresholdSlider", &currentSettings.threshold, 0.0f, 0.5f, "%.3f");
-        ImGui::PopItemWidth();
+        ImGui::Text("Voice Threshold (type or drag red line below):");
         ImGui::SameLine();
-        ImGui::PushItemWidth(-FLT_MIN);
+        ImGui::PushItemWidth(100.0f);
         ImGui::InputFloat("##ThresholdInput", &currentSettings.threshold, 0.001f, 0.01f, "%.3f");
         ImGui::PopItemWidth();
         
-        ImGui::Text("Live Volume Level:");
+        ImGui::Text("Live Volume Level (Drag red line to adjust threshold):");
         ImVec4 volColor = isTalking ? ImVec4(0.2f, 0.9f, 0.2f, 1.0f) : ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, volColor);
         
@@ -154,18 +151,30 @@ void renderGUI() {
         if (progressVal > 1.0f) progressVal = 1.0f;
         if (progressVal < 0.0f) progressVal = 0.0f;
         
-        ImGui::ProgressBar(progressVal, ImVec2(-1.0f, 18.0f), "");
+        ImGui::ProgressBar(progressVal, ImVec2(-1.0f, 24.0f), "");
         ImGui::PopStyleColor();
         
         ImVec2 pMin = ImGui::GetItemRectMin();
         ImVec2 pMax = ImGui::GetItemRectMax();
+        
+        // Handle dragging the threshold directly on the progress bar
+        if (ImGui::IsItemHovered() || ImGui::IsItemActive()) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                ImVec2 mousePos = ImGui::GetMousePos();
+                float relativeX = (mousePos.x - pMin.x) / (pMax.x - pMin.x);
+                if (relativeX < 0.0f) relativeX = 0.0f;
+                if (relativeX > 1.0f) relativeX = 1.0f;
+                currentSettings.threshold = relativeX * 0.5f;
+            }
+        }
+        
         float tFraction = currentSettings.threshold / 0.5f;
         if (tFraction > 1.0f) tFraction = 1.0f;
         if (tFraction < 0.0f) tFraction = 0.0f;
         
         float lineX = pMin.x + (pMax.x - pMin.x) * tFraction;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddLine(ImVec2(lineX, pMin.y), ImVec2(lineX, pMax.y), IM_COL32(255, 0, 0, 255), 2.5f);
+        drawList->AddLine(ImVec2(lineX, pMin.y), ImVec2(lineX, pMax.y), IM_COL32(255, 50, 50, 255), 3.0f);
         
         if (isTalking) {
             ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "🎙️ Talking...");

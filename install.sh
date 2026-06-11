@@ -79,10 +79,10 @@ EXE_PATH="$INSTALL_DIR/pngtuber-bin"
         cd "$REPO_DIR" || exit
         git fetch >/dev/null 2>&1
         
-        LOCAL=$(git rev-parse HEAD)
-        REMOTE=$(git rev-parse @{u})
+        # Перевіряємо, чи є нові коміти у віддаленому репозиторії
+        UPSTREAM_CHANGES=$(git log HEAD..@{u} --oneline 2>/dev/null)
 
-        if [ "$LOCAL" != "$REMOTE" ]; then
+        if [ -n "$UPSTREAM_CHANGES" ]; then
             if command -v notify-send >/dev/null 2>&1; then
                 notify-send "PNGTuber" "📥 Знайдено оновлення! Встановлення у фоні..."
             fi
