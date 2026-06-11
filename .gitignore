@@ -29,3 +29,7 @@ presets/slonik/talk.png
 presets/errors/talk.png
 presets/errors/settings.txt
 presets/errors/idle.png
+
+# Build and external dependencies
+imgui/
+pngtuber-bin
