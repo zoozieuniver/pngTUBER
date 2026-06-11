@@ -137,13 +137,35 @@ void renderGUI() {
         }
         
         ImGui::Spacing();
-        ImGui::SliderFloat("Voice Threshold", &currentSettings.threshold, 0.0f, 0.5f, "%.3f");
+        ImGui::Text("Voice Threshold:");
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
+        ImGui::SliderFloat("##ThresholdSlider", &currentSettings.threshold, 0.0f, 0.5f, "%.3f");
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::PushItemWidth(-FLT_MIN);
+        ImGui::InputFloat("##ThresholdInput", &currentSettings.threshold, 0.001f, 0.01f, "%.3f");
+        ImGui::PopItemWidth();
         
         ImGui::Text("Live Volume Level:");
         ImVec4 volColor = isTalking ? ImVec4(0.2f, 0.9f, 0.2f, 1.0f) : ImVec4(0.8f, 0.8f, 0.2f, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_PlotHistogram, volColor);
-        ImGui::ProgressBar(currentVolume, ImVec2(-1.0f, 15.0f), "");
+        
+        float progressVal = currentVolume / 0.5f;
+        if (progressVal > 1.0f) progressVal = 1.0f;
+        if (progressVal < 0.0f) progressVal = 0.0f;
+        
+        ImGui::ProgressBar(progressVal, ImVec2(-1.0f, 18.0f), "");
         ImGui::PopStyleColor();
+        
+        ImVec2 pMin = ImGui::GetItemRectMin();
+        ImVec2 pMax = ImGui::GetItemRectMax();
+        float tFraction = currentSettings.threshold / 0.5f;
+        if (tFraction > 1.0f) tFraction = 1.0f;
+        if (tFraction < 0.0f) tFraction = 0.0f;
+        
+        float lineX = pMin.x + (pMax.x - pMin.x) * tFraction;
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddLine(ImVec2(lineX, pMin.y), ImVec2(lineX, pMax.y), IM_COL32(255, 0, 0, 255), 2.5f);
         
         if (isTalking) {
             ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.2f, 1.0f), "🎙️ Talking...");
@@ -170,11 +192,24 @@ void renderGUI() {
             ImGui::EndCombo();
         }
         
-        ImGui::Spacing();
-        ImGui::Text("Avatar Resolution:");
         bool sizeChanged = false;
-        if (ImGui::SliderInt("Width", &currentSettings.w, 100, 1500)) sizeChanged = true;
-        if (ImGui::SliderInt("Height", &currentSettings.h, 100, 1500)) sizeChanged = true;
+        ImGui::Text("Avatar Width:");
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
+        if (ImGui::SliderInt("##WidthSlider", &currentSettings.w, 100, 1500)) sizeChanged = true;
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::PushItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##WidthInput", &currentSettings.w, 1, 10)) sizeChanged = true;
+        ImGui::PopItemWidth();
+        
+        ImGui::Text("Avatar Height:");
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
+        if (ImGui::SliderInt("##HeightSlider", &currentSettings.h, 100, 1500)) sizeChanged = true;
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::PushItemWidth(-FLT_MIN);
+        if (ImGui::InputInt("##HeightInput", &currentSettings.h, 1, 10)) sizeChanged = true;
+        ImGui::PopItemWidth();
         
         if (ImGui::Button("Scale +10%")) {
             currentSettings.w = (int)(currentSettings.w * 1.10f);
@@ -193,7 +228,14 @@ void renderGUI() {
         }
         
         ImGui::Spacing();
-        ImGui::SliderInt("Shake Intensity", &currentSettings.shake, 0, 20);
+        ImGui::Text("Shake Intensity:");
+        ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.65f);
+        ImGui::SliderInt("##ShakeSlider", &currentSettings.shake, 0, 20);
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImGui::PushItemWidth(-FLT_MIN);
+        ImGui::InputInt("##ShakeInput", &currentSettings.shake, 1, 5);
+        ImGui::PopItemWidth();
         ImGui::Spacing();
     }
     

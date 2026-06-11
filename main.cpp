@@ -64,6 +64,9 @@ int main() {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
+            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_CLOSE) {
+                running = false;
+            }
             
             processGUIEvent(&event);
             

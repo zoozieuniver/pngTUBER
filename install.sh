@@ -73,27 +73,29 @@ INSTALL_DIR="$HOME/.local/share/pngtuber-cli"
 REPO_DIR="$INSTALL_DIR/source"
 EXE_PATH="$INSTALL_DIR/pngtuber-bin"
 
-# Тиха перевірка оновлень
-if ping -q -c 1 -W 1 google.com >/dev/null 2>&1; then
-    cd "$REPO_DIR" || exit
-    git fetch >/dev/null 2>&1
-    
-    LOCAL=$(git rev-parse HEAD)
-    REMOTE=$(git rev-parse @{u})
+# Тиха перевірка оновлень в фоновому режимі, щоб не затримувати запуск
+(
+    if ping -q -c 1 -W 1 google.com >/dev/null 2>&1; then
+        cd "$REPO_DIR" || exit
+        git fetch >/dev/null 2>&1
+        
+        LOCAL=$(git rev-parse HEAD)
+        REMOTE=$(git rev-parse @{u})
 
-    if [ "$LOCAL" != "$REMOTE" ]; then
-        echo "📥 New update found! Updating..."
-        git pull >/dev/null 2>&1
-        if [ ! -d "imgui" ]; then
-            git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui
+        if [ "$LOCAL" != "$REMOTE" ]; then
+            echo "📥 New update found! Updating in background..."
+            git pull >/dev/null 2>&1
+            if [ ! -d "imgui" ]; then
+                git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui >/dev/null 2>&1
+            fi
+            g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+                imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+                imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+                -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl >/dev/null 2>&1
+            echo "✅ Updated successfully! Please restart the app to apply changes."
         fi
-        g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
-            imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
-            imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-            -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
-        echo "✅ Updated successfully!"
     fi
-fi
+) &
 
 # Запуск двигуна
 if [ -f "$EXE_PATH" ]; then
