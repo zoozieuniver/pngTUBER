@@ -83,6 +83,9 @@ EXE_PATH="$INSTALL_DIR/pngtuber-bin"
         REMOTE=$(git rev-parse @{u})
 
         if [ "$LOCAL" != "$REMOTE" ]; then
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send "PNGTuber" "📥 Знайдено оновлення! Встановлення у фоні..."
+            fi
             echo "📥 New update found! Updating in background..."
             git pull >/dev/null 2>&1
             if [ ! -d "imgui" ]; then
@@ -92,6 +95,10 @@ EXE_PATH="$INSTALL_DIR/pngtuber-bin"
                 imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
                 imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
                 -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl >/dev/null 2>&1
+            
+            if command -v notify-send >/dev/null 2>&1; then
+                notify-send "PNGTuber" "✅ Оновлено успішно! Перезапустіть програму, щоб застосувати зміни."
+            fi
             echo "✅ Updated successfully! Please restart the app to apply changes."
         fi
     fi
