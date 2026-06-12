@@ -63,12 +63,33 @@ void loadGlobalSettings() {
         
         if (!(in >> globalSettings.bgColorMode)) {
             globalSettings.bgColorMode = 0;
+        } else {
+            // Backwards compatibility mapping:
+            if (globalSettings.bgColorMode == 5) {
+                globalSettings.bgColorMode = 2; // Transparent
+            } else if (globalSettings.bgColorMode == 6) {
+                globalSettings.bgColorMode = 3; // Custom Color
+            } else if (globalSettings.bgColorMode == 7) {
+                globalSettings.bgColorMode = 4; // Custom Image
+            } else if (globalSettings.bgColorMode < 0 || globalSettings.bgColorMode > 4) {
+                globalSettings.bgColorMode = 0; // Fallback to Green Screen
+            }
         }
         if (!(in >> globalSettings.controlX >> globalSettings.controlY >> globalSettings.controlW >> globalSettings.controlH)) {
             globalSettings.controlX = 100;
             globalSettings.controlY = 100;
             globalSettings.controlW = 450;
             globalSettings.controlH = 550;
+        }
+        if (!(in >> globalSettings.customBgColor[0] >> globalSettings.customBgColor[1] >> globalSettings.customBgColor[2] >> globalSettings.customBgColor[3])) {
+            globalSettings.customBgColor[0] = 0.0f;
+            globalSettings.customBgColor[1] = 1.0f;
+            globalSettings.customBgColor[2] = 0.0f;
+            globalSettings.customBgColor[3] = 1.0f;
+        }
+        std::getline(in, dummy); // consume newline
+        if (!std::getline(in, globalSettings.customBgImagePath)) {
+            globalSettings.customBgImagePath = "";
         }
     } else {
         globalSettings.currentPreset = "default";
@@ -78,6 +99,11 @@ void loadGlobalSettings() {
         globalSettings.controlY = 100;
         globalSettings.controlW = 450;
         globalSettings.controlH = 550;
+        globalSettings.customBgColor[0] = 0.0f;
+        globalSettings.customBgColor[1] = 1.0f;
+        globalSettings.customBgColor[2] = 0.0f;
+        globalSettings.customBgColor[3] = 1.0f;
+        globalSettings.customBgImagePath = "";
     }
 }
 
@@ -88,5 +114,8 @@ void saveGlobalSettings() {
         out << globalSettings.activeMicName << "\n";
         out << globalSettings.bgColorMode << "\n";
         out << globalSettings.controlX << " " << globalSettings.controlY << " " << globalSettings.controlW << " " << globalSettings.controlH << "\n";
+        out << globalSettings.customBgColor[0] << " " << globalSettings.customBgColor[1] << " " 
+            << globalSettings.customBgColor[2] << " " << globalSettings.customBgColor[3] << "\n";
+        out << globalSettings.customBgImagePath << "\n";
     }
 }

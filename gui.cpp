@@ -6,6 +6,60 @@
 #include "audio.h"
 #include "avatar.h"
 #include <iostream>
+#include <cstdlib>
+#include <cstdio>
+#include <cstring>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
+
+std::string openFileDialog() {
+#ifdef _WIN32
+    char szFile[260] = { 0 };
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.lpstrFilter = "Images (*.png;*.jpg;*.jpeg;*.bmp)\0*.png;*.jpg;*.jpeg;*.bmp\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFileTitle = NULL;
+    ofn.nMaxFileTitle = 0;
+    ofn.lpstrInitialDir = NULL;
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+    if (GetOpenFileNameA(&ofn)) {
+        return std::string(szFile);
+    }
+    return "";
+#else
+    std::string path = "";
+    char buffer[1024];
+    FILE* pipe = nullptr;
+    
+    if (system("which zenity > /dev/null 2>&1") == 0) {
+        pipe = popen("zenity --file-selection --title=\"Select Background Image\" --file-filter=\"Images | *.png *.jpg *.jpeg *.bmp\"", "r");
+    } else if (system("which kdialog > /dev/null 2>&1") == 0) {
+        pipe = popen("kdialog --getopenfilename . \"*.png *.jpg *.jpeg *.bmp |Images\"", "r");
+    } else {
+        std::cerr << "No zenity or kdialog found!" << std::endl;
+        return "";
+    }
+    
+    if (pipe) {
+        if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            path = buffer;
+            if (!path.empty() && path.back() == '\n') {
+                path.pop_back();
+            }
+        }
+        pclose(pipe);
+    }
+    return path;
+#endif
+}
 
 SDL_Window* controlWindow = nullptr;
 SDL_Renderer* controlRenderer = nullptr;
@@ -251,11 +305,65 @@ void renderGUI() {
     // 3. Background Settings (OBS Integration)
     if (ImGui::CollapsingHeader("OBS Background Color", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Spacing();
-        const char* bgOptions[] = { "Green Screen", "Blue Screen", "Magenta Screen", "Black", "White" };
-        ImGui::Combo("Background Color", &globalSettings.bgColorMode, bgOptions, IM_ARRAYSIZE(bgOptions));
+        const char* bgOptions[] = { 
+            "Green Screen", 
+            "Blue Screen", 
+            "Transparent / No Background", 
+            "Custom Color", 
+            "Custom Image" 
+        };
+        
+        int prevMode = globalSettings.bgColorMode;
+        if (ImGui::Combo("Background Color", &globalSettings.bgColorMode, bgOptions, IM_ARRAYSIZE(bgOptions))) {
+            if (prevMode != globalSettings.bgColorMode) {
+                updateWindowTransparency();
+                if (globalSettings.bgColorMode == 4) {
+                    loadCustomBgTexture(globalSettings.customBgImagePath);
+                }
+            }
+        }
+        
+        if (globalSettings.bgColorMode == 3) { // Custom Color
+            ImGui::Spacing();
+            ImGui::Text("Choose Custom Color (RGBA):");
+            ImGui::ColorEdit4("##CustomColorPicker", globalSettings.customBgColor);
+        } else if (globalSettings.bgColorMode == 4) { // Custom Image
+            ImGui::Spacing();
+            ImGui::Text("Custom Background Image Path:");
+            
+            static char pathBuf[512] = "";
+            static bool initBuf = false;
+            if (!initBuf || strcmp(pathBuf, globalSettings.customBgImagePath.c_str()) != 0) {
+                strncpy(pathBuf, globalSettings.customBgImagePath.c_str(), sizeof(pathBuf));
+                pathBuf[sizeof(pathBuf) - 1] = '\0';
+                initBuf = true;
+            }
+            
+            ImGui::PushItemWidth(ImGui::GetContentRegionAvail().x * 0.60f);
+            ImGui::InputText("##BgImagePath", pathBuf, IM_ARRAYSIZE(pathBuf));
+            ImGui::PopItemWidth();
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Browse...")) {
+                std::string chosenPath = openFileDialog();
+                if (!chosenPath.empty()) {
+                    strncpy(pathBuf, chosenPath.c_str(), sizeof(pathBuf));
+                    pathBuf[sizeof(pathBuf) - 1] = '\0';
+                    globalSettings.customBgImagePath = chosenPath;
+                    loadCustomBgTexture(globalSettings.customBgImagePath);
+                }
+            }
+            
+            ImGui::SameLine();
+            if (ImGui::Button("Load")) {
+                globalSettings.customBgImagePath = pathBuf;
+                loadCustomBgTexture(globalSettings.customBgImagePath);
+            }
+            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "Click 'Browse...' to select an image, or enter path manually and click 'Load'");
+        }
         
         ImGui::Spacing();
-        ImGui::TextWrapped("💡 To use in OBS: Add a 'Window Capture (PipeWire)' or 'Window Capture (X11)' source targeting the avatar window, then add a 'Chroma Key' effect in OBS and select the matching color.");
+        ImGui::TextWrapped("💡 To use in OBS: Add a 'Window Capture (PipeWire)' or 'Window Capture (X11)' source targeting the avatar window, then add a 'Chroma Key' effect in OBS and select the matching color (or use 'Transparent' mode directly if supported).");
         ImGui::Spacing();
     }
     

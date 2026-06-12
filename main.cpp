@@ -26,6 +26,8 @@ int main() {
     } catch (const std::exception& e) {
         std::cerr << "Path normalization error: " << e.what() << std::endl;
     }
+    // Enable transparency for EGL window surfaces on Wayland
+    setenv("SDL_VIDEO_EGL_ALLOW_TRANSPARENCY", "1", 1);
 #endif
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {

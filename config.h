@@ -16,11 +16,13 @@ struct PresetSettings {
 struct GlobalSettings {
     std::string currentPreset = "default";
     std::string activeMicName = "None";
-    int bgColorMode = 0; // 0: Green, 1: Blue, 2: Magenta, 3: Black, 4: White
+    int bgColorMode = 0; // 0: Green, 1: Blue, 2: Magenta, 3: Black, 4: White, 5: Transparent, 6: Custom Color, 7: Custom Image
     int controlX = 100;
     int controlY = 100;
     int controlW = 450;
     int controlH = 550;
+    float customBgColor[4] = {0.0f, 1.0f, 0.0f, 1.0f};
+    std::string customBgImagePath = "";
 };
 
 extern PresetSettings currentSettings;

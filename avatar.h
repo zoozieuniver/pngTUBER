@@ -13,5 +13,7 @@ bool applyAvatarPreset(const std::string& name);
 void renderAvatar();
 void updateAvatarWindowPosition();
 Uint32 getAvatarWindowID();
+void loadCustomBgTexture(const std::string& path);
+void updateWindowTransparency();
 
 #endif // AVATAR_H

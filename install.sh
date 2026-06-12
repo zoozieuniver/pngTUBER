@@ -89,6 +89,12 @@ INSTALL_DIR="$HOME/.local/share/pngtuber-cli"
 REPO_DIR="$INSTALL_DIR/source"
 EXE_PATH="$INSTALL_DIR/pngtuber-bin"
 
+# Автоматично вмикаємо Wayland-драйвер для SDL2, якщо активна Wayland-сесія (наприклад, у Hyprland)
+if [ -n "$WAYLAND_DISPLAY" ]; then
+    export SDL_VIDEODRIVER=wayland
+    export SDL_VIDEO_EGL_ALLOW_TRANSPARENCY=1
+fi
+
 # Тиха перевірка оновлень в фоновому режимі, щоб не затримувати запуск
 (
     if ping -q -c 1 -W 1 google.com >/dev/null 2>&1; then
