@@ -30,37 +30,53 @@ elif command -v emerge >/dev/null 2>&1; then
     fi
 fi
 
-# 3. Клонування/Оновлення сирців
-if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
-    echo "📦 Copying local source files to $REPO_DIR..."
-    mkdir -p "$REPO_DIR"
-    cp -rf ./* "$REPO_DIR/"
+# 3. Підготовка репозиторію оновлень ($REPO_DIR)
+# Репозиторій в $REPO_DIR має бути чистим клоном з GitHub, щоб майбутні git pull працювали без конфліктів.
+if [ -d "$REPO_DIR/.git" ]; then
+    echo "🔄 Cleaning and updating update cache in $REPO_DIR..."
+    cd "$REPO_DIR" && git fetch --all >/dev/null 2>&1 && git reset --hard origin/main >/dev/null 2>&1 && git clean -fd >/dev/null 2>&1
 else
-    if [ -d "$REPO_DIR/.git" ]; then
-        cd "$REPO_DIR" && git pull
-    else
-        rm -rf "$REPO_DIR"
-        git clone https://github.com/zoozieuniver/pngTUBER.git "$REPO_DIR"
-    fi
+    echo "📥 Cloning clean update cache to $REPO_DIR..."
+    rm -rf "$REPO_DIR"
+    git clone https://github.com/zoozieuniver/pngTUBER.git "$REPO_DIR"
 fi
 
-# 3.1 Клонування ImGui якщо його немає
+# 3.1 Клонування ImGui в $REPO_DIR якщо його немає
 if [ ! -d "$REPO_DIR/imgui" ]; then
-    echo "📥 Cloning Dear ImGui..."
+    echo "📥 Cloning Dear ImGui into update cache..."
     git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git "$REPO_DIR/imgui"
 fi
 
 # 4. Компіляція
-cd "$REPO_DIR"
-g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
-    imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
-    imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-    -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+# Якщо ми запускаємо скрипт з папки розробника (де є сирці), компілюємо локальні файли.
+# Якщо ні (наприклад, встановлення з чистого скрипта), компілюємо з папки оновлень.
+if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
+    echo "🛠️ Compiling from local developer directory..."
+    if [ ! -d "imgui" ]; then
+        echo "📥 Cloning Dear ImGui locally..."
+        git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui
+    fi
+    g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+        imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+        imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+else
+    echo "🛠️ Compiling from update cache..."
+    cd "$REPO_DIR"
+    g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+        imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+        imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+fi
 
 if [ $? -eq 0 ]; then
     echo "✅ Engine compiled: $BINARY_ENGINE"
-    # Копіюємо ресурси та чистимо тимчасові файли (якщо g++ створив .o файли)
-    cp -r presets assets "$INSTALL_DIR/" 2>/dev/null
+    # Копіюємо ресурси
+    if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
+        cp -r presets assets "$INSTALL_DIR/" 2>/dev/null
+    else
+        cp -r "$REPO_DIR/presets" "$REPO_DIR/assets" "$INSTALL_DIR/" 2>/dev/null
+    fi
     find . -maxdepth 1 -type f -name "*.o" -delete 
 else
     echo "❌ Compilation failed!" && exit 1
