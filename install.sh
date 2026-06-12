@@ -97,32 +97,29 @@ fi
 
 # Тиха перевірка оновлень в фоновому режимі, щоб не затримувати запуск
 (
-    if ping -q -c 1 -W 1 google.com >/dev/null 2>&1; then
-        cd "$REPO_DIR" || exit
-        git fetch >/dev/null 2>&1
-        
-        # Перевіряємо, чи є нові коміти у віддаленому репозиторії
-        UPSTREAM_CHANGES=$(git log HEAD..@{u} --oneline 2>/dev/null)
-
-        if [ -n "$UPSTREAM_CHANGES" ]; then
-            if command -v notify-send >/dev/null 2>&1; then
-                notify-send "PNGTuber" "📥 Знайдено оновлення! Встановлення у фоні..."
-            fi
-            echo "📥 New update found! Updating in background..."
-            git pull >/dev/null 2>&1
-            if [ ! -d "imgui" ]; then
-                git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui >/dev/null 2>&1
-            fi
-            g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
-                imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
-                imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-                -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl >/dev/null 2>&1
-            
-            if command -v notify-send >/dev/null 2>&1; then
-                notify-send "PNGTuber" "✅ Оновлено успішно! Перезапустіть програму, щоб застосувати зміни."
-            fi
-            echo "✅ Updated successfully! Please restart the app to apply changes."
+    cd "$REPO_DIR" || exit
+    git fetch >/dev/null 2>&1
+    LOCAL=$(git rev-parse HEAD 2>/dev/null)
+    REMOTE=$(git rev-parse origin/main 2>/dev/null)
+    
+    if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send "PNGTuber" "📥 Знайдено оновлення! Встановлення у фоні..."
         fi
+        echo "📥 New update found! Updating in background..."
+        git pull >/dev/null 2>&1
+        if [ ! -d "imgui" ]; then
+            git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui >/dev/null 2>&1
+        fi
+        g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+            imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+            imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+            -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl >/dev/null 2>&1
+        
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send "PNGTuber" "✅ Оновлено успішно! Перезапустіть програму, щоб застосувати зміни."
+        fi
+        echo "✅ Updated successfully! Please restart the app to apply changes."
     fi
 ) &
 
