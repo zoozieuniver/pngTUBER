@@ -95,33 +95,43 @@ if [ -n "$WAYLAND_DISPLAY" ]; then
     export SDL_VIDEO_EGL_ALLOW_TRANSPARENCY=1
 fi
 
-# Тиха перевірка оновлень в фоновому режимі, щоб не затримувати запуск
-(
+# Перевірка оновлень (синхронно, з відображенням у терміналі)
+if [ -d "$REPO_DIR" ]; then
     cd "$REPO_DIR" || exit
+    
+    echo "🔍 Перевірка оновлень..."
     git fetch >/dev/null 2>&1
+    
     LOCAL=$(git rev-parse HEAD 2>/dev/null)
     REMOTE=$(git rev-parse origin/main 2>/dev/null)
     
     if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
-        if command -v notify-send >/dev/null 2>&1; then
-            notify-send "PNGTuber" "📥 Знайдено оновлення! Встановлення у фоні..."
-        fi
-        echo "📥 New update found! Updating in background..."
-        git pull >/dev/null 2>&1
+        echo -e "\e[33m📥 Знайдено оновлення! Завантаження змін...\e[0m"
+        git pull
+        
         if [ ! -d "imgui" ]; then
-            git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui >/dev/null 2>&1
+            git clone --depth 1 -b v1.90.9 https://github.com/ocornut/imgui.git imgui
         fi
+        
+        echo -e "\e[36m⚙️ Перекомпіляція програми...\e[0m"
+        rm -f "$EXE_PATH"
         g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
             imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
             imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-            -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl >/dev/null 2>&1
-        
-        if command -v notify-send >/dev/null 2>&1; then
-            notify-send "PNGTuber" "✅ Оновлено успішно! Перезапустіть програму, щоб застосувати зміни."
+            -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+            
+        if [ $? -eq 0 ]; then
+            echo -e "\e[32m✅ Оновлено успішно!\e[0m"
+            echo -e "\e[35m👉 Натисніть Enter для перезапуску програми...\e[0m"
+            read
+            exec "$0" "$@"
+        else
+            echo -e "\e[31m❌ Помилка компіляції оновлення!\e[0m"
+            echo -e "Спробуємо запустити стару версію двигуна..."
+            sleep 2
         fi
-        echo "✅ Updated successfully! Please restart the app to apply changes."
     fi
-) &
+fi
 
 # Запуск двигуна
 if [ -f "$EXE_PATH" ]; then
@@ -143,7 +153,7 @@ Name=PNGTuber
 Exec=$LAUNCHER
 Icon=$INSTALL_DIR/assets/icons/app_icon.png
 Path=$INSTALL_DIR
-Terminal=false
+Terminal=true
 Categories=AudioVideo;Utility;
 EOF
 
