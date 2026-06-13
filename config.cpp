@@ -31,6 +31,19 @@ void loadPresetSettings(const std::string& name) {
     std::ifstream in(file);
     if (in.is_open()) {
         in >> currentSettings.x >> currentSettings.y >> currentSettings.w >> currentSettings.h >> currentSettings.shake >> currentSettings.threshold;
+        
+        int jEnabled = 1, jelEnabled = 1;
+        if (in >> jEnabled >> currentSettings.jumpHeight >> currentSettings.jumpSpeed >> jelEnabled >> currentSettings.jellyIntensity >> currentSettings.jellySpeed) {
+            currentSettings.jumpEnabled = (jEnabled != 0);
+            currentSettings.jellyEnabled = (jelEnabled != 0);
+        } else {
+            currentSettings.jumpEnabled = true;
+            currentSettings.jumpHeight = 15.0f;
+            currentSettings.jumpSpeed = 1.0f;
+            currentSettings.jellyEnabled = true;
+            currentSettings.jellyIntensity = 1.0f;
+            currentSettings.jellySpeed = 1.0f;
+        }
     } else {
         currentSettings.x = 100;
         currentSettings.y = 100;
@@ -38,6 +51,12 @@ void loadPresetSettings(const std::string& name) {
         currentSettings.h = 400;
         currentSettings.shake = 5;
         currentSettings.threshold = 0.05f;
+        currentSettings.jumpEnabled = true;
+        currentSettings.jumpHeight = 15.0f;
+        currentSettings.jumpSpeed = 1.0f;
+        currentSettings.jellyEnabled = true;
+        currentSettings.jellyIntensity = 1.0f;
+        currentSettings.jellySpeed = 1.0f;
     }
 }
 
@@ -48,7 +67,9 @@ void savePresetSettings(const std::string& name) {
     
     std::ofstream out(file);
     if (out.is_open()) {
-        out << currentSettings.x << " " << currentSettings.y << " " << currentSettings.w << " " << currentSettings.h << " " << currentSettings.shake << " " << currentSettings.threshold;
+        out << currentSettings.x << " " << currentSettings.y << " " << currentSettings.w << " " << currentSettings.h << " " << currentSettings.shake << " " << currentSettings.threshold << " "
+            << (currentSettings.jumpEnabled ? 1 : 0) << " " << currentSettings.jumpHeight << " " << currentSettings.jumpSpeed << " "
+            << (currentSettings.jellyEnabled ? 1 : 0) << " " << currentSettings.jellyIntensity << " " << currentSettings.jellySpeed;
     }
 }
 

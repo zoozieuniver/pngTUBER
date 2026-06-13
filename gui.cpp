@@ -300,6 +300,23 @@ void renderGUI() {
         ImGui::InputInt("##ShakeInput", &currentSettings.shake, 1, 5);
         ImGui::PopItemWidth();
         ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.6f, 0.4f, 1.0f, 1.0f), "Speech Animation (Bounce & Jelly)");
+        
+        ImGui::Checkbox("Enable Jumping", &currentSettings.jumpEnabled);
+        if (currentSettings.jumpEnabled) {
+            ImGui::SliderFloat("Jump Height", &currentSettings.jumpHeight, 1.0f, 50.0f, "%.1f");
+            ImGui::SliderFloat("Jump Gravity/Speed", &currentSettings.jumpSpeed, 0.1f, 3.0f, "%.2f");
+        }
+        
+        ImGui::Spacing();
+        ImGui::Checkbox("Enable Jelly (Squash/Stretch)", &currentSettings.jellyEnabled);
+        if (currentSettings.jellyEnabled) {
+            ImGui::SliderFloat("Jelly Intensity", &currentSettings.jellyIntensity, 0.1f, 3.0f, "%.2f");
+            ImGui::SliderFloat("Jelly Elasticity/Speed", &currentSettings.jellySpeed, 0.1f, 3.0f, "%.2f");
+        }
+        ImGui::Spacing();
     }
     
     // 3. Background Settings (OBS Integration)

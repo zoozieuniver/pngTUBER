@@ -11,6 +11,12 @@ struct PresetSettings {
     int h = 400;
     int shake = 5;
     float threshold = 0.05f;
+    bool jumpEnabled = true;
+    float jumpHeight = 15.0f;
+    float jumpSpeed = 1.0f;
+    bool jellyEnabled = true;
+    float jellyIntensity = 1.0f;
+    float jellySpeed = 1.0f;
 };
 
 struct GlobalSettings {

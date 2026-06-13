@@ -169,6 +169,70 @@ Uint32 getAvatarWindowID() {
 void renderAvatar() {
     if (!avatarRenderer) return;
     
+    // Track transition from silent to talking
+    static bool wasTalking = false;
+    bool startedTalking = (isTalking && !wasTalking);
+    wasTalking = isTalking;
+    
+    // Jump animation physics
+    static float jumpY = 0.0f;
+    static float jumpVelocity = 0.0f;
+    
+    // Jelly spring animation variables
+    static float scaleY = 1.0f;
+    static float scaleYVelocity = 0.0f;
+    
+    if (currentSettings.jumpEnabled) {
+        if (startedTalking) {
+            // Launch the jump
+            jumpVelocity = -currentSettings.jumpHeight;
+            
+            if (currentSettings.jellyEnabled) {
+                // Stretch Y as it launches
+                scaleYVelocity = currentSettings.jumpHeight * 0.02f * currentSettings.jellyIntensity;
+            }
+        }
+        
+        if (jumpY < 0.0f || jumpVelocity != 0.0f) {
+            float gravity = 1.0f * currentSettings.jumpSpeed;
+            jumpVelocity += gravity;
+            jumpY += jumpVelocity;
+            
+            if (jumpY >= 0.0f) {
+                jumpY = 0.0f;
+                jumpVelocity = 0.0f;
+                
+                // Squash Y as it lands
+                if (currentSettings.jellyEnabled) {
+                    scaleYVelocity = -currentSettings.jumpHeight * 0.03f * currentSettings.jellyIntensity;
+                }
+            }
+        }
+    } else {
+        jumpY = 0.0f;
+        jumpVelocity = 0.0f;
+    }
+    
+    // Jelly spring physics update
+    if (currentSettings.jellyEnabled) {
+        float springK = 0.12f * currentSettings.jellySpeed;
+        float damping = 0.75f;
+        
+        float forceY = -springK * (scaleY - 1.0f) - damping * scaleYVelocity;
+        scaleYVelocity += forceY;
+        scaleY += scaleYVelocity;
+        
+        // Safety bounds
+        if (scaleY < 0.2f) scaleY = 0.2f;
+        if (scaleY > 2.0f) scaleY = 2.0f;
+    } else {
+        scaleY = 1.0f;
+        scaleYVelocity = 0.0f;
+    }
+    
+    float scaleX = 2.0f - scaleY;
+    
+    // Shake offset logic (only when talking)
     if (isTalking) {
         float s = (float)currentSettings.shake;
         if (s > 0) {
@@ -217,7 +281,24 @@ void renderAvatar() {
     
     SDL_Texture* activeTex = isTalking ? talkTex : idleTex;
     if (activeTex) {
-        SDL_Rect rect = {(int)offsetX, (int)offsetY, currentSettings.w, currentSettings.h};
+        int renderW = currentSettings.w;
+        int renderH = currentSettings.h;
+        
+        if (currentSettings.jellyEnabled) {
+            renderW = (int)(currentSettings.w * scaleX);
+            renderH = (int)(currentSettings.h * scaleY);
+        }
+        
+        // Pivot around the bottom-center of the avatar bounding box
+        int baseBottomX = (int)offsetX + currentSettings.w / 2;
+        int baseBottomY = (int)(offsetY + jumpY) + currentSettings.h;
+        
+        SDL_Rect rect;
+        rect.w = renderW;
+        rect.h = renderH;
+        rect.x = baseBottomX - renderW / 2;
+        rect.y = baseBottomY - renderH;
+        
         SDL_RenderCopy(avatarRenderer, activeTex, NULL, &rect);
     }
     
