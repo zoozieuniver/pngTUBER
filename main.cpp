@@ -13,6 +13,9 @@
 #include "audio.h"
 #include "avatar.h"
 #include "gui.h"
+#include "imgui.h"
+#include <algorithm>
+#include <cctype>
 
 namespace fs = std::filesystem;
 
@@ -72,6 +75,37 @@ int main() {
             
             processGUIEvent(&event);
             
+            if (event.type == SDL_KEYDOWN) {
+                ImGuiIO& io = ImGui::GetIO();
+                if (!io.WantCaptureKeyboard) {
+                    SDL_Keycode code = event.key.keysym.sym;
+                    std::string keyChar = "";
+                    if (code >= SDLK_a && code <= SDLK_z) {
+                        char c = 'a' + (code - SDLK_a);
+                        keyChar = std::string(1, c);
+                    } else if (code >= SDLK_0 && code <= SDLK_9) {
+                        char c = '0' + (code - SDLK_0);
+                        keyChar = std::string(1, c);
+                    } else {
+                        const char* name = SDL_GetKeyName(code);
+                        if (name) {
+                            keyChar = name;
+                            std::transform(keyChar.begin(), keyChar.end(), keyChar.begin(), ::tolower);
+                        }
+                    }
+                    
+                    if (!keyChar.empty()) {
+                        for (auto& layer : currentLayers) {
+                            std::string lHk = layer.hotkey;
+                            std::transform(lHk.begin(), lHk.end(), lHk.begin(), ::tolower);
+                            if (lHk == keyChar) {
+                                layer.visible = !layer.visible;
+                            }
+                        }
+                    }
+                }
+            }
+            
             if (event.type == SDL_WINDOWEVENT) {
                 if (event.window.windowID == getAvatarWindowID()) {
                     if (event.window.event == SDL_WINDOWEVENT_MOVED) {
@@ -91,6 +125,15 @@ int main() {
         SDL_Delay(10);
     }
 
+    if (editorModeActive) {
+        globalSettings.controlW = savedControlW;
+        globalSettings.controlH = savedControlH;
+    } else {
+        int w, h;
+        SDL_GetWindowSize(controlWindow, &w, &h);
+        globalSettings.controlW = w;
+        globalSettings.controlH = h;
+    }
     updateControlWindowPosition();
     updateAvatarWindowPosition();
     saveGlobalSettings();

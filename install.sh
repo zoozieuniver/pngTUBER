@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Отримання поточної директорії скрипта
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Перезапуск у nix-shell для NixOS
+if [ -f /etc/NIXOS ] && [ -z "$PNGTUBER_NIX" ]; then
+    echo "❄️ NixOS detected. Running installer inside nix-shell..."
+    export PNGTUBER_NIX=1
+    exec nix-shell "$SCRIPT_DIR/shell.nix" --run "cd \"$SCRIPT_DIR\" && ./install.sh"
+fi
+
 # Шляхи (використовуємо абсолютні для стабільності)
 REAL_HOME=$(eval echo "~$USER")
 INSTALL_DIR="$REAL_HOME/.local/share/pngtuber-cli"
@@ -14,8 +24,10 @@ echo "🚀 Starting Clean Installation..."
 # 1. Створення папок
 mkdir -p "$INSTALL_DIR" "$BIN_DIR" "$REAL_HOME/.local/share/applications"
 
-# 2. Встановлення залежностей (додано перевірку на Arch/CachyOS/Gentoo)
-if command -v pacman >/dev/null 2>&1; then
+# 2. Встановлення залежностей (додано перевірку на Arch/CachyOS/Gentoo/NixOS)
+if [ -f /etc/NIXOS ]; then
+    echo "❄️ NixOS detected. Dependencies are loaded from shell.nix."
+elif command -v pacman >/dev/null 2>&1; then
     sudo pacman -S --noconfirm gcc git sdl2 sdl2_image desktop-file-utils
 elif command -v dnf >/dev/null 2>&1; then
     sudo dnf install -y gcc-c++ git SDL2-devel SDL2_image-devel desktop-file-utils
@@ -48,6 +60,15 @@ if [ ! -d "$REPO_DIR/imgui" ]; then
 fi
 
 # 4. Компіляція
+# Визначення параметрів компіляції через pkg-config
+if command -v pkg-config >/dev/null 2>&1; then
+    SDL_CFLAGS=$(pkg-config --cflags sdl2 sdl2_image)
+    SDL_LIBS=$(pkg-config --libs sdl2 sdl2_image)
+else
+    SDL_CFLAGS="-I/usr/include/SDL2"
+    SDL_LIBS="-lSDL2 -lSDL2_image"
+fi
+
 # Якщо ми запускаємо скрипт з папки розробника (де є сирці), компілюємо локальні файли.
 # Якщо ні (наприклад, встановлення з чистого скрипта), компілюємо з папки оновлень.
 if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
@@ -59,14 +80,14 @@ if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
     g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
         imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
         imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends $SDL_CFLAGS $SDL_LIBS -lpthread -ldl
 else
     echo "🛠️ Compiling from update cache..."
     cd "$REPO_DIR"
     g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
         imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
         imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+        -o "$BINARY_ENGINE" -Iimgui -Iimgui/backends $SDL_CFLAGS $SDL_LIBS -lpthread -ldl
 fi
 
 if [ $? -eq 0 ]; then
@@ -74,8 +95,10 @@ if [ $? -eq 0 ]; then
     # Копіюємо ресурси
     if [ -f "main.cpp" ] && [ -f "config.cpp" ]; then
         cp -r presets assets "$INSTALL_DIR/" 2>/dev/null
+        cp shell.nix "$INSTALL_DIR/" 2>/dev/null
     else
         cp -r "$REPO_DIR/presets" "$REPO_DIR/assets" "$INSTALL_DIR/" 2>/dev/null
+        cp "$REPO_DIR/shell.nix" "$INSTALL_DIR/" 2>/dev/null
     fi
     find . -maxdepth 1 -type f -name "*.o" -delete 
 else
@@ -115,10 +138,24 @@ if [ -d "$REPO_DIR" ]; then
         
         echo -e "\e[36m⚙️ Перекомпіляція програми...\e[0m"
         rm -f "$EXE_PATH"
-        g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
-            imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
-            imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
-            -o "$EXE_PATH" -Iimgui -Iimgui/backends -I/usr/include/SDL2 -lSDL2 -lSDL2_image -lpthread -ldl
+        if [ -f /etc/NIXOS ]; then
+            nix-shell "$INSTALL_DIR/shell.nix" --run "g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+                imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+                imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+                -o \"$EXE_PATH\" -Iimgui -Iimgui/backends \$(pkg-config --cflags --libs sdl2 sdl2_image) -lpthread -ldl"
+        else
+            if command -v pkg-config >/dev/null 2>&1; then
+                SDL_CFLAGS=$(pkg-config --cflags sdl2 sdl2_image)
+                SDL_LIBS=$(pkg-config --libs sdl2 sdl2_image)
+            else
+                SDL_CFLAGS="-I/usr/include/SDL2"
+                SDL_LIBS="-lSDL2 -lSDL2_image"
+            fi
+            g++ main.cpp config.cpp audio.cpp avatar.cpp gui.cpp \
+                imgui/imgui.cpp imgui/imgui_draw.cpp imgui/imgui_widgets.cpp imgui/imgui_tables.cpp \
+                imgui/backends/imgui_impl_sdl2.cpp imgui/backends/imgui_impl_sdlrenderer2.cpp \
+                -o "$EXE_PATH" -Iimgui -Iimgui/backends $SDL_CFLAGS $SDL_LIBS -lpthread -ldl
+        fi
             
         if [ $? -eq 0 ]; then
             echo -e "\e[32m✅ Оновлено успішно!\e[0m"

@@ -5,6 +5,9 @@
 
 extern SDL_Window* controlWindow;
 extern SDL_Renderer* controlRenderer;
+extern int savedControlW;
+extern int savedControlH;
+extern int selectedLayerIdx;
 
 bool initGUI();
 void cleanupGUI();
